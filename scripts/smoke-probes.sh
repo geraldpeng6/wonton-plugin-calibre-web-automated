@@ -18,8 +18,9 @@ marker_file() { # 标记文件：套件传状态目录时放目录下，传文�
   if [[ -d "$SMOKE_STATE" ]]; then printf '%s' "$SMOKE_STATE/cwa-marker"; else printf '%s' "${SMOKE_STATE}.marker"; fi
 }
 
-_container() { # 本实例里这个服务的容器
-  local inst="${SMOKE_INSTANCE:-}" args=(--filter "label=wonton.plugin=$PROBES_PLUGIN_ID" --filter "label=wonton.service=calibre-web-automated")
+_container() { # 本实例里这个服务的容器（插件 id 是本仓库常量；PROBES_PLUGIN_ID 不随 e2e 的子壳体传进来）
+  local inst="${SMOKE_INSTANCE:-}" args=(
+    --filter "label=wonton.plugin=app.calibre-web-automated.books" --filter "label=wonton.service=calibre-web-automated")
   if [[ -z "$inst" && -n "${SMOKE_BASE:-}" ]]; then
     inst="${SMOKE_BASE#http://}"; inst="${inst%%.*}"
   fi
