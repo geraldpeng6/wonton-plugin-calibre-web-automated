@@ -1,5 +1,6 @@
-# 家庭电子书库：书库放共享文件夹 books，网页经核心网关代登录（Remote-User 请求头），
-# 阅读器 App 连局域网端口走 OPDS（应用自带的账号密码认证）。丢进入库目录的书由应用自动转格式、补元数据。
+# 家庭电子书库：书库放共享文件夹 books，网页经云吞登录（OIDC，主人带 admin 组自动是管理员，
+# 家人首次登录自动建号）。阅读器 App 连局域网端口走 OPDS（应用自带的账号密码认证）。
+# 丢进入库目录的书由应用自动转格式、补元数据。
 # 上游 Calibre-Web Automated（GPL-3.0），镜像按清单列表（index）的摘要固定。
 services:
   calibre-web-automated:
@@ -8,7 +9,18 @@ services:
       PUID: ${PUID}
       PGID: ${PGID}
       TZ: ${TZ}
-      # 一次性 s6 服务 wonton-sso 用：把默认 admin 换成用户的账号、打开代登录（见 sso-setup.sh）。
+      # 一次性 s6 服务 wonton-sso 用：把 OIDC 提供方配置写进 app.db（上游只存这里，没有环境变量），
+      # 每次创建容器都要重写（密钥会换，见插件规范"OIDC"）。
+      WONTON_OIDC_CLIENT_ID: ${WONTON_OIDC_CLIENT_ID}
+      WONTON_OIDC_CLIENT_SECRET: ${WONTON_OIDC_CLIENT_SECRET}
+      WONTON_OIDC_ISSUER: ${WONTON_OIDC_ISSUER}
+      WONTON_OIDC_AUTH_URL: ${WONTON_OIDC_AUTH_URL}
+      WONTON_OIDC_TOKEN_URL: ${WONTON_OIDC_TOKEN_URL}
+      WONTON_OIDC_USERINFO_URL: ${WONTON_OIDC_USERINFO_URL}
+      # 核心的 OIDC 签发方是 http（插件网络内别名），oauthlib 默认拒绝在 http 上发起流程；
+      # 容器端口只对着核心网关和局域网开关，流量不越过主机边界。
+      OAUTHLIB_INSECURE_TRANSPORT: "1"
+      # 主人的 OIDC 账号（应用在他首次登录时自动建）同步成 lan.client 显示的口令，OPDS 才能用。
       WONTON_OWNER_NAME: ${WONTON_OWNER_NAME}
       WONTON_SECRET_CLIENT_PASSWORD: ${WONTON_SECRET_CLIENT_PASSWORD}
     volumes:
@@ -92,23 +104,27 @@ x-wonton:
     zh: |
       把家里的书摆上一个全家人都能打开的书架：手机、平板、电脑的浏览器里直接读，Kindle、Kobo 这类阅读器 App 连上来也能读。
 
-      把电子书文件放进"待入库"文件夹，或者从网页上传，它会自动转成通用格式、抓封面和简介、摆上书架。书架本身是普通的文件夹（books 共享文件夹），书一直都在那里，卸载插件也不会丢。
+      打开网页就是用云吞的账号登录，不用另外注册；家人第一次打开自动建号，能读书、能下载。把电子书文件放进"待入库"文件夹，或者从网页上传，它会自动转成通用格式、抓封面和简介、摆上书架。书架本身是普通的文件夹（books 共享文件夹），书一直都在那里，卸载插件也不会丢。
 
-      发到 Kindle 需要在应用设置里填你自己邮箱的发信服务器（亚马逊只收来自你邮箱的投递）；插件不代填。抓封面和简介需要能访问外网。阅读器 App 怎么连：在插件详情里打开"在局域网开放"，把显示的地址、账号和密码填进 App。
+      发到 Kindle 需要在应用设置里填你自己邮箱的发信服务器（亚马逊只收来自你邮箱的投递）；插件不代填。抓封面和简介需要能访问外网。阅读器 App 怎么连：在插件详情里打开"在局域网开放"，把显示的地址、账号和密码填进 App（先在网页里登录一次，密码才生效）。
     en: |
       Put your family's books on one shelf everyone can open: read in the browser on phones, tablets and computers, or connect reader apps like Kindle and Kobo.
 
-      Drop ebook files into the ingest folder or upload them on the web page — they are converted to common formats, enriched with covers and descriptions, and shelved automatically. The library itself is a plain folder (the books shared folder), so your books stay even if the plugin is removed.
+      Opening the web page signs you in with your Wonton account — no extra registration; family members get an account on their first visit and can read and download. Drop ebook files into the ingest folder or upload them on the web page — they are converted to common formats, enriched with covers and descriptions, and shelved automatically. The library itself is a plain folder (the books shared folder), so your books stay even if the plugin is removed.
 
-      Sending to Kindle needs your own email account's outgoing mail settings in the app (Amazon only accepts mail from your address); the plugin does not fill them in for you. Fetching covers and descriptions needs internet access. To connect a reader app, turn on the LAN switch in the plugin details and enter the address, account and password shown there.
+      Sending to Kindle needs your own email account's outgoing mail settings in the app (Amazon only accepts mail from your address); the plugin does not fill them in for you. Fetching covers and descriptions needs internet access. To connect a reader app, turn on the LAN switch in the plugin details and enter the address, account and password shown there (sign in on the web once first, then the password works).
   release_notes: { zh: 首个版本。, en: First release. }
   webui:
     service: calibre-web-automated
     port: 8083
-    sso: proxy
-    proxy:
-      headers:
-        Remote-User: "{user}"
+    # 打开网页直接进 OIDC 登录跳转，省掉应用登录页上点按钮。
+    path: /login/generic
+    sso: oidc
+    oidc:
+      # 上游 flask-dance 的回调：oauth_bb.py 拼 "{host}/login/{provider}/authorized"。
+      redirect_paths: [/login/generic/authorized]
+      # 上游按 groups 里的组名给主人管理员（config_enable_oauth_group_admin_management）。
+      owner_groups: [admin]
   # 阅读器 App（OPDS，Basic Auth）在局域网直连；详情页的开关打开后显示地址和账号。
   lan:
     ports:

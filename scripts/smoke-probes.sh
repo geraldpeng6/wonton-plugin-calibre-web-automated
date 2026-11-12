@@ -1,13 +1,20 @@
 # shellcheck shell=bash
 # scripts/smoke.sh 的探针：Calibre-Web Automated。
-# sso=proxy（Remote-User 代登录，家人自动建号）；OPDS 经网关代登录；清单没有 mcp。
+# sso=oidc（云吞登录，主人带 admin 组、家人自动建号）；OPDS 走应用自带 Basic Auth；清单没有 mcp。
 # 变量别叫 state：shellcheck 把这份文件连着 probes.sh 一起分析，probes.sh 自己也读一个 dev.sh 提供的 state；
 # 子壳体函数（fn() ( … )）里给 state 赋值，SC2031 就报在 probes.sh 上，CI 红。
 
-web_assert() { grep -q 'Calibre-Web Automated'; }   # 代登录打开的书库首页；没配好代登录会跳到应用登录页，断言就红
+app_session() { # 走完云吞→OIDC 跳转，让 jar 里带上应用的登录态（--sso 会重建 jar，重试一次抗抖动）
+  dweb --sso / >/dev/null 2>&1 || dweb --sso / >/dev/null 2>&1
+}
+
+web_assert() { # 未登录会被网关挡下；带会话到达的是应用登录页（OIDC 入口由 webui.path 直达，不依赖按钮）
+  grep -q 'Calibre-Web Automated'
+}
 
 identity_check() { # 应用自己的用户表接口（仅管理员）：认出的是用户的、有管理员位的账号
   local users
+  app_session || { echo "OIDC 登录跳转走不通"; return 1; }
   users="$(dweb "/ajax/listusers?limit=50")" || { echo "listusers 失败：$users"; return 1; }
   jq -e --arg u "$SMOKE_OWNER" \
     '.rows | map(select(.name == $u)) | length == 1 and (.[0].role % 2) == 1' <<<"$users" >/dev/null ||
@@ -60,8 +67,9 @@ data_check() (
     "SELECT count(*) FROM books WHERE title = '$marker'" 2>/dev/null)" ||
     { echo "读 metadata.db 失败"; return 1; }
   [[ "$found" == "1" ]] || { echo "书库里没有 $marker（count=$found）"; return 1; }
-  # 应用（不只数据库）还把它列出来：OPDS 新书源，经网关代登录。
-  if grep -qF "$marker" <<<"$(dweb /opds/new 2>/dev/null)"; then
+  # 应用（不只数据库）还把它列出来：首页默认按"最新"排，登录后的会话能看到。
+  app_session || { echo "OIDC 登录跳转走不通"; return 1; }
+  if grep -qF "$marker" <<<"$(dweb / 2>/dev/null)"; then
     echo "书还在，应用也列得出来：$marker"
     return 0
   fi

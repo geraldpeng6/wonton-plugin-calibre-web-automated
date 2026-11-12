@@ -11,13 +11,13 @@
 | `storage.share.books:write` | 书库放在 `books` 共享文件夹（容器内 `/calibre-library`），应用要写 `metadata.db` 和转换后的书 |
 | `network.egress` | 抓封面、简介等元数据（应用内置源：Google Books、Douban 等） |
 | `network.lan` | 阅读器 App 在局域网直连 8083（OPDS，应用自带的账号密码认证）；详情页开关默认关 |
-| `owner.identity` | 把默认管理员账号改成用户的用户名 |
+| `owner.identity` | 按用户名同步 OPDS 账号口令（账号由 OIDC 首次登录自动建） |
 
 ## 登录
 
-`webui.sso: proxy`，网关带 `Remote-User: {user}` 请求头。Calibre-Web 的"允许反向代理认证"、头名和"自动建号"三项存在 `/config/app.db`（`settings` 表），没有环境变量；首次启动由镜像内的 s6 一次性服务（`wonton-sso`，经 `configs` 注入，排在应用服务之前）直接写库，同时把默认管理员 `admin` 改名为用户的用户名、密码换成 `secrets` 生成的 `client_password`（OPDS、发阅读器 App 都用这套账号）。家人打开网页时按 `{user}` 自动建普通用户（默认角色：下载 + 网页阅读，见 `sso-setup.py`）。
+`webui.sso: oidc`，打开网页走云吞的 OIDC 登录（`webui.path` 直接指向应用的 OIDC 起点，主人登录时 `groups` 里带 `admin`，应用按组给管理员角色）。Calibre-Web 的 OAuth 提供方配置（generic 行）和登录类型存在 `/config/app.db`（`oauthProvider`、`settings` 表），没有环境变量；镜像内的 s6 一次性服务（`wonton-sso`，经 `configs` 注入，排在应用服务之前）在应用启动前直接写库：generic 提供方指向核心注入的 `WONTON_OIDC_*` 端点（scope 带 `groups`）、登录类型切到 OAuth、家人自动建号的默认角色设为"下载 + 网页阅读"。按规范"OIDC"一节，每次创建容器都整体重写（保留数据重装后 `WONTON_OIDC_CLIENT_SECRET` 是新的）。
 
-已配过（`/config/.wonton-sso-ready`）就不再改，用户在应用里改的设置不会被重装冲掉。
+内置的 `admin` 账号是上游用公开默认口令建的，一次性服务把它换成核心生成的口令停用；管理能力走主人的 OIDC 账号。OPDS 账号就是用户自己的账号（应用在首次 OIDC 登录时自动建，口令为空），一次性服务在每次创建容器时把它同步成 `client_password`，详情页开关里显示的账号密码才连得上；首次网页登录前口令还没生效。
 
 ## 截图
 
