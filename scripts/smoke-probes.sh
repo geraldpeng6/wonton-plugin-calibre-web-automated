@@ -36,15 +36,18 @@ _container() { # 本实例里这个服务的容器（插件 id 是本仓库常�
 }
 
 data_write() (
-  local marker c i
+  local marker c
   marker="wonton-smoke-$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')"
   c="$(_container)"
   [[ -n "$c" ]] || { echo "找不到插件容器"; return 1; }
   # 用应用自带的 calibredb 往书库加一本以标记命名的书（显式 --title，入库处理不联网改标题）。
-  docker exec "$c" sh -c "printf 'wonton data probe\n' > /tmp/$marker.txt" &&
+  if ! { docker exec "$c" sh -c "printf 'wonton data probe\n' > /tmp/$marker.txt" &&
     docker exec "$c" calibredb add --library-path /calibre-library --title "$marker" "/tmp/$marker.txt" &&
-    docker exec "$c" rm -f "/tmp/$marker.txt" || { echo "calibredb add 失败"; return 1; }
-  for i in $(seq 1 120); do
+    docker exec "$c" rm -f "/tmp/$marker.txt"; }; then
+    echo "calibredb add 失败"
+    return 1
+  fi
+  for _ in $(seq 1 120); do
     if docker exec "$c" sqlite3 /calibre-library/metadata.db \
       "SELECT count(*) FROM books WHERE title = '$marker'" 2>/dev/null | grep -q '^1$'; then
       printf '%s' "$marker" >"$(marker_file)"
