@@ -82,9 +82,9 @@ configs:
     content: ""
 
 x-wonton:
-  spec: "0.12"
+  spec: "0.13"
   id: app.calibre-web-automated.books
-  version: 0.1.1
+  version: 0.1.2
   kind: app
   title: { zh: 家庭书架（Calibre-Web Automated）, en: Home Book Library (Calibre-Web Automated) }
   description:
@@ -114,8 +114,8 @@ x-wonton:
 
       Sending to Kindle needs your own email account's outgoing mail settings in the app (Amazon only accepts mail from your address); the plugin does not fill them in for you. Fetching covers and descriptions needs internet access. To connect a reader app, turn on the LAN switch in the plugin details and enter the address, account and password shown there (sign in on the web once first, then the password works).
   release_notes:
-    zh: 清单去掉 owner_groups：登录时不再给主人加 admin 组，主人在应用里不再自动是管理员。
-    en: "Drop owner_groups from the manifest: sign-in no longer adds the admin group for the owner, so the owner is no longer an app admin automatically."
+    zh: 管理员登录时带 admin 组，在应用里是管理员（清单改用规范 0.13 的 admin_groups）。
+    en: "Admins sign in with the admin group and are admins in the app again (the manifest uses admin_groups from spec 0.13)."
   webui:
     service: calibre-web-automated
     port: 8083
@@ -125,6 +125,7 @@ x-wonton:
     oidc:
       # 上游 flask-dance 的回调：oauth_bb.py 拼 "{host}/login/{provider}/authorized"。
       redirect_paths: [/login/generic/authorized]
+      admin_groups: [admin]
   # 阅读器 App（OPDS，Basic Auth）在局域网直连；详情页的开关打开后显示地址和账号。
   lan:
     ports:
