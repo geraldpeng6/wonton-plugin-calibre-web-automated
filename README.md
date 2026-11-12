@@ -15,9 +15,9 @@
 
 ## 登录
 
-`webui.sso: oidc`，打开网页走云吞的 OIDC 登录（`webui.path` 直接指向应用的 OIDC 起点，主人登录时 `groups` 里带 `admin`，应用按组给管理员角色）。Calibre-Web 的 OAuth 提供方配置（generic 行）和登录类型存在 `/config/app.db`（`oauthProvider`、`settings` 表），没有环境变量；镜像内的 s6 一次性服务（`wonton-sso`，经 `configs` 注入，排在应用服务之前）在应用启动前直接写库：generic 提供方指向核心注入的 `WONTON_OIDC_*` 端点（scope 带 `groups`）、登录类型切到 OAuth、家人自动建号的默认角色设为"下载 + 网页阅读"。按规范"OIDC"一节，每次创建容器都整体重写（保留数据重装后 `WONTON_OIDC_CLIENT_SECRET` 是新的）。
+`webui.sso: oidc`，打开网页走云吞的 OIDC 登录（`webui.path` 直接指向应用的 OIDC 起点，应用按 `groups` 里的 `admin` 组给管理员角色，清单不声明额外的组时没人带这个组）。Calibre-Web 的 OAuth 提供方配置（generic 行）和登录类型存在 `/config/app.db`（`oauthProvider`、`settings` 表），没有环境变量；镜像内的 s6 一次性服务（`wonton-sso`，经 `configs` 注入，排在应用服务之前）在应用启动前直接写库：generic 提供方指向核心注入的 `WONTON_OIDC_*` 端点（scope 带 `groups`）、登录类型切到 OAuth、家人自动建号的默认角色设为"下载 + 网页阅读"。按规范"OIDC"一节，每次创建容器都整体重写（保留数据重装后 `WONTON_OIDC_CLIENT_SECRET` 是新的）。
 
-内置的 `admin` 账号是上游用公开默认口令建的，一次性服务把它换成核心生成的口令停用；管理能力走主人的 OIDC 账号。OPDS 账号就是用户自己的账号（应用在首次 OIDC 登录时自动建，口令为空），一次性服务在每次创建容器时把它同步成 `client_password`，详情页开关里显示的账号密码才连得上；首次网页登录前口令还没生效。
+内置的 `admin` 账号是上游用公开默认口令建的，一次性服务把它换成核心生成的口令停用；OPDS 账号就是用户自己的账号（应用在首次 OIDC 登录时自动建，口令为空），一次性服务在每次创建容器时把它同步成 `client_password`，详情页开关里显示的账号密码才连得上；首次网页登录前口令还没生效。
 
 ## 截图
 
